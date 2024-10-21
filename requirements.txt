@@ -1,4 +1,5 @@
 streamlit
 ultralytics
 opencv-python-headless
-torch==2.0.1  # or whatever version is required for your model
+torch==2.3.0+cpu
+torchvision==0.18.0+cpu
