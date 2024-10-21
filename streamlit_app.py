@@ -6,10 +6,14 @@ from PIL import Image
 import tempfile
 import os
 
-# Path to the trained model
+# Load the trained YOLOv8 model
 trained_model_path = 'best.pt'
 
-# Load the trained YOLOv8 model
+# Ensure the model file exists, or provide a mechanism to download it
+if not os.path.exists(trained_model_path):
+    st.error("Model file not found. Ensure that 'best.pt' is uploaded.")
+    st.stop()
+
 model = YOLO(trained_model_path)
 
 # Title of the Streamlit app
@@ -26,40 +30,47 @@ def process_image(image):
     return annotated_frame_rgb
 
 def process_video(video_path):
-    cap = cv2.VideoCapture(video_path)
-    frame_width = int(cap.get(3))
-    frame_height = int(cap.get(4))
-    output_path = 'annotated_video.mp4'
-    out = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*'mp4v'), 20.0, (frame_width, frame_height))
+    try:
+        cap = cv2.VideoCapture(video_path)
+        frame_width = int(cap.get(3))
+        frame_height = int(cap.get(4))
+        output_path = tempfile.NamedTemporaryFile(suffix='.mp4', delete=False).name
+        out = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*'mp4v'), 20.0, (frame_width, frame_height))
 
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
 
-        results = model(frame)
-        annotated_frame = results[0].plot()
-        out.write(annotated_frame)
+            results = model(frame)
+            annotated_frame = results[0].plot()
+            out.write(annotated_frame)
 
-    cap.release()
-    out.release()
-    return output_path
+        cap.release()
+        out.release()
+        return output_path
+    except Exception as e:
+        st.error(f"Error processing video: {str(e)}")
+        return None
 
 if uploaded_file is not None:
     file_type = uploaded_file.type.split('/')[0]
 
     if file_type == 'image':
         image = Image.open(uploaded_file)
-        annotated_frame_rgb = process_image(image)
+        with st.spinner('Processing image...'):
+            annotated_frame_rgb = process_image(image)
         st.image(image, caption='Uploaded Image', use_column_width=True)
         st.image(annotated_frame_rgb, caption='Annotated Image', use_column_width=True)
 
     elif file_type == 'video':
-        tfile = tempfile.NamedTemporaryFile(delete=False)
-        tfile.write(uploaded_file.read())
-        video_path = tfile.name
-        output_path = process_video(video_path)
-        st.video(output_path)
-        os.remove(video_path)
+        with st.spinner('Processing video...'):
+            tfile = tempfile.NamedTemporaryFile(delete=False)
+            tfile.write(uploaded_file.read())
+            video_path = tfile.name
+            output_path = process_video(video_path)
+            if output_path:
+                st.video(output_path)
+            os.remove(video_path)
 
     st.success("Processing completed.")
